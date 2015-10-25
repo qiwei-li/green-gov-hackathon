@@ -7,12 +7,18 @@ library(rCharts)
 library(rjson)
 library(lattice)
 library(googleVis)
+library(plotly)
+library(dplyr)
+library(leaflet)
 
 load("data/building.rda")
 load('data/co2e.rda') #load data frame co2 
 load("data/fleet.rda")
 load('data/four_way_key.rda')
 load('data/bubble.rda')
+load('data/waste.rda')
+load("data/regression.rda")
+load('data/VehicleEngergyDistribution.rda')
 
 shinyServer(function(input, output) {
   
@@ -207,12 +213,21 @@ shinyServer(function(input, output) {
   
   ## Sustainability Bubble plot
   output$yearBasicSelector <- renderUI ({
-    sliderInput("yearSelectorUnit", "Year: ",
-                min=2013, max=2014,value=2013, step=1,
-                animate = animationOptions(interval=1000, loop=TRUE, pauseButton="Pause"))
+    selectizeInput("yearSelectorUnit", "Select year: ",
+                   choices = unique(res$year),
+                   selected = 2013)
   })
+  
+  sustainabilityCore <- eventReactive(input$yearBasicUnitButton, {
+    return(res[input$yearSelectorUnit == res$year, ])
+  })
+  
+  
   output$testing <- renderGvis({
-    dat = res[input$yearSelectorUnit == res$year, ]
+    dat = sustainabilityCore()
+    #dat$x = log(dat$energy)
+    #dat$y = log(dat$emission)
+    dat = dat[dat$energy < 4e9 & dat$emission < 6e5,]
     co2_Bubble <- gvisBubbleChart(dat, xvar = 'energy', yvar = 'emission', colorvar = 'building',
                                   sizevar = 'N',
                                   options=list(
@@ -220,13 +235,159 @@ shinyServer(function(input, output) {
                                     explorer="{actions: ['dragToZoom', 
                                     'rightClickToReset'],
                                     maxZoomIn:0.05}",
-                                    vAxis="{title:'CO2 Emission',minValue:0}",
-                                    hAxis="{title:'Energy Consumption',textPosition:'out',minValue:0}",
+                                    vAxis="{title:'CO2 Emission',minValue:-2e4}",
+                                    hAxis="{title:'Energy Consumption',textPosition:'out',minValue:-5e7}",
                                     title="Correlations between energy consumption, CO2 emission and Departments",
-                                    width=850, height=650, bubble.opacity=0.5,
+                                    width=850, height=725, bubble.opacity=0.5,
                                     bubble = "{textStyle:{color:'none'}}"))
     
     co2_Bubble
 })
+  
+  
+  #Fleet Program
+  output$FleetDepartmentSelector <- renderUI({
+    selectizeInput("FleetDepartmentSelectorUnit", "Select the Department: ",
+                   choices = unique(fleet$Agency), selected = "Department of General Services",multiple = TRUE)
+  })
+  
+  FleetDepartmentCore <- eventReactive(input$FleetDepartmentButton, {
+    fleetdepartment_names = unique(as.character(fleet$Agency))
+    if(input$FleetDepartmentSelectorUnit %in% fleetdepartment_names){
+      mySubset = input$FleetDepartmentSelectorUnit
+      return(mySubset)
+    }
+  })
+  
+  output$FleetBarplot1 <- renderPlotly({
+    #detach("package:plyr", unload=TRUE)
+    mySubset = FleetDepartmentCore()
+    bar_Active_df <- fleet %>% 
+      select(Agency,Equipment.Number,Disposed) %>% 
+      group_by(Agency,Disposed) %>% 
+      summarise(CountOfVeh = n()) %>% 
+      filter(Disposed == 'No')
     
+    bar_Disposed_df  <- fleet %>% 
+      select(Agency,Equipment.Number,Disposed) %>% 
+      group_by(Agency,Disposed) %>% 
+      summarise(CountOfVeh = n()) %>% 
+      filter(Disposed == 'Yes')
+    
+    bar_Active_df %>% filter(Agency %in% mySubset) %>% 
+      plot_ly(x = Agency, y = CountOfVeh, name = "Active Assests", type = "bar",filename='newInventory-bar') %>%
+      add_trace(x = Agency, y = CountOfVeh, name = "Disposed Assets", data = filter(bar_Disposed_df,Agency %in% mySubset)) %>%
+      layout(xaxis = list(title="Agency Name"), yaxis = list(title="Number of Assets"), barmode = "group", 
+             title='Number of Assets by Agencies')
+  })
+  
+  output$FleetLineChart <- renderPlotly({
+    linedata <- fleet %>% select(Equipment.Number, Report.Year, Disposed) %>% 
+      group_by(Report.Year,Disposed) %>% 
+      summarise(CountOfVeh = n()) 
+    
+    active_line <- linedata %>% filter(Disposed == 'Yes')
+    disposed_line <- linedata %>% filter(Disposed == 'No')
+    
+    active_line %>% plot_ly(x=Report.Year,y=CountOfVeh,name = "Active Assests", type = 'line')%>%
+      add_trace(x = Report.Year, y = CountOfVeh, name = "Disposed Assets", data = disposed_line ) %>%
+      layout(xaxis = list(title="Agency Name"), yaxis = list(title="Number of Assets"), 
+             title='Number of Assets across years')
+  })
+  
+  output$FleetBarFuelType <- renderPlotly({
+    bardata <- fleet %>% select(Equipment.Number,Fuel.Type, Disposed) %>%
+      filter(Disposed=="No") %>% group_by(Fuel.Type) %>% 
+      summarise(CountOfVeh = n())
+    
+    bardata %>% plot_ly(x=Fuel.Type,y=CountOfVeh, type = 'bar')%>%
+      layout(xaxis = list(title="Fuel Type"), yaxis = list(title="Number of Assets"), 
+             title='Number of Active Assets by Fuel Types')
+  })
+  
+  output$FleetBarEVType <- renderPlotly({
+    bardata <- fleet %>% select(Equipment.Number,Fuel.Type, Disposed,Report.Year) %>%
+      filter(Disposed=="No") %>% group_by(Fuel.Type,Report.Year) %>% 
+      summarise(CountOfVeh = n_distinct(Equipment.Number)) %>% filter(Fuel.Type!='N/A') %>% 
+      mutate(isEV = Fuel.Type %in% c("EVC")) %>% 
+      group_by(Report.Year,isEV) %>% 
+      summarise(Count = sum(CountOfVeh))
+    bardata$fuel = rep(c('Traditional Vehicle','Electric Vehicle'),4)
+    
+    bardata %>% plot_ly(x=as.factor(Report.Year),y=Count, type = 'bar', color=fuel)%>%
+      layout(xaxis = list(title="Year"), yaxis = list(title="Count"),
+             title='Number of EVs in active vehicles')
+  })
+  
+  output$FleetBarAcqType <- renderPlotly({
+    bardata <- fleet %>% select(Equipment.Number, Acquisition.Method.Reason, Report.Year,Disposed) %>%
+      filter(Disposed=="No") %>%
+      group_by(Report.Year,Acquisition.Method.Reason) %>% 
+      summarise(CountOfVeh = n_distinct(Equipment.Number)) %>% 
+      filter(Acquisition.Method.Reason != '')
+    
+    bardata %>% plot_ly(x=as.factor(Report.Year),y=CountOfVeh, type = 'bar', color=Acquisition.Method.Reason)%>%
+      layout(xaxis = list(title="Year"), yaxis = list(title="Count"), barmode = "stack",
+             title='Distribution of New Assets through Acquisition ')
+  })
+  
+  output$table1 <- renderDataTable({
+    return(regression)
+  })
+  
+  output$tablekey <- renderTable({
+    return(four_way_key)
+  })
+  
+  
+  output$AgencySelector <- renderUI ({
+    selectizeInput("AgencySelectorUnit", "Select an Agency: ",
+                   choices = unique(sabrc$AgencyName), selected="Department of General Services")
+  })
+  getAgency <- eventReactive(input$wasteButton, {
+    mySubset = sabrc[sabrc$AgencyName == input$AgencySelectorUnit & as.character(sabrc$ReportYear) == input$Year, ]
+    return(mySubset)
+  })
+  output$wastePlot <- renderChart({
+    mySubset = getAgency()
+    p <- nPlot(Value~SABRCCategory, data=mySubset, group='ValueType', type='multiBarChart', dom="wastePlot")
+    p$chart(forceY = c(0))
+    p$params$height = 300
+    return(p)
+  })
+  
+  output$regressionSelector <- renderUI({
+    checkboxGroupInput("Xs", "Regress total CO2 emission on: ",
+                       choices=names(regression)[-c(1:3)],
+                       selected = names(regression)[-c(1:3)])
+  })
+  
+  runRegression <- reactive({
+    lm(as.formula(paste0("CO2e ~ ", paste(input$Xs,collapse="+"))),data=regression)
+  })
+    
+  output$regTab <- renderPrint({
+    #summary(runRegression())$coefficients
+    summary(runRegression())
+    
+  })
+  
+  output$map <- renderLeaflet({
+    #leaflet() %>% addTiles() %>% setView(-93.65, 42.0285, zoom = 17) %>% 
+    # addPopups(-93.65, 42.0285, 'Here is the <b>Department of Statistics</b>, ISU')
+    test <- na.omit(energyEVDisMap) %>% mutate(identifier = paste0(GeoLat,GeoLon))
+    test2 <- test[!duplicated(test$identifier),]
+    
+    leaflet(test2,padding = c(0,0,0,100)) %>%
+      addTiles() %>%
+      addMarkers(lng = ~GeoLon, lat = ~GeoLat, #weight = 2,
+                 #radius = test2$SumofFuel+1000, #~sqrt(SumofFuel) * 100000
+                 popup = ~paste(sep = "<br/>", paste0("<strong>", building,"</strong>"),
+                                paste0("Zipcode: ", Postal.Code),
+                                paste0("Vehicles: ", CountOfVeh), paste0("EVs: ", CountofEV),
+                                paste0("Sum of Fuel: ", SumofFuel), paste0("Average MPG: ", AverageMPG),
+                                paste0("Water Used: ",Water.Use..All.Water.Sources...kgal.),
+                                paste0("Electricity Used: ",Electricity.Use...Grid.Purchase..kWh.),
+                                paste0("Energy star score: ",ENERGY.STAR.Score)))
+  })
 })

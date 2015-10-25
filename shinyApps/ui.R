@@ -3,10 +3,15 @@ library(shiny)
 library(shinydashboard)
 library(rCharts)
 library(graphics)
+library(plotly)
+library(leaflet)
 
 dashboardPage(
   
-  dashboardHeader(),
+  dashboardHeader(
+    title="California State Government Sustainability Information Dashboard",
+    titleWidth=600
+  ),
   
   dashboardSidebar(
     h1("Version 1.0"),
@@ -29,8 +34,23 @@ dashboardPage(
         "welcome",
         column(
           width=6,
-          h4("Insert introduction here"),
-          HTML("<font size='4'>Contact: <br>Member1 <br>Member2 <br>Member3 <br>Member4<br></font>")
+          h1('Introduction'),
+          p('In the face of environmental change and the drought,
+            California government seeks to find innovative ways to reduce waste in resources and increase sustainable practices. Here we leverage the pilot 
+            Statewide Open Data Portal and visulize publicly available data for derived insights and help
+            state government make informed decisions.'),
+          p('Specifically, in each tab you will find the most informative interactive graph/maps
+            to help you understand each dataset and connections among datasets.'),
+          h1('Dashboard creators:'),
+          p(strong('Qiwei Li:'), 'qwli at ucdavis dot edu'),
+          p(strong('Haomiao Meng:'), 'hmmeng at ucdavis dot edu'),
+          p(strong('Yu Pei:'), 'whpei at ucdavis dot edu'),
+          p(strong('Jiaping Zhang:'), 'jpzhang at ucdavis dot edu'),
+          br(),
+          br(),
+          h4(strong('Acknowledgement:')),
+          p('Thanks to California Department of general service for organizing this event.'),
+          p('Technical supports from all the staff/technicians. And last but not the least, the great food! wink emoticon')
         ),
         column(
           width=6,
@@ -118,12 +138,44 @@ dashboardPage(
         "fleet",
         tabsetPanel(
           tabPanel(
-            title = strong("fleet 1.1"),
+            title = strong("Number of Assets by Agencies"),
             column(
-              width=3
+              width=10,
+              uiOutput("FleetDepartmentSelector"),
+              helpText("You can select a department for the assets information."),
+              actionButton("FleetDepartmentButton","See Visualization!")
             ),
-            column(
-              width=9
+            fluidRow(
+              #height = 725, 
+              plotlyOutput("FleetBarplot1")
+            )
+          ),
+          tabPanel(
+            title = strong("Number of Assets by Year"),
+            fluidRow(
+              #height = 725, 
+              plotlyOutput("FleetLineChart")
+            )
+          ),
+          tabPanel(
+            title = strong("Number of Active Assets by Fuel Type"),
+            fluidRow(
+              height = 425, 
+              plotlyOutput("FleetBarFuelType")
+            )
+          ),
+          tabPanel(
+            title = strong("Number of EVs in active vehicles"),
+            fluidRow(
+              height = 425, 
+              plotlyOutput("FleetBarEVType")
+            )
+          ),
+          tabPanel(
+            title = strong("Number of Assets by Acquisitions"),
+            fluidRow(
+              height = 425, 
+              plotlyOutput("FleetBarAcqType")
             )
           )
         )
@@ -133,12 +185,19 @@ dashboardPage(
         "waste",
         tabsetPanel(
           tabPanel(
-            title = strong("waste 1.1"),
+            title = strong("SABRC Results"),
             column(
-              width=3
+              width=3,
+              uiOutput("AgencySelector"),
+              radioButtons("Year", "Select One Year",
+                           choices=c("2013", "2013/2014"),
+                           selected = "2013/2014"),
+              actionButton("wasteButton", "See Visualization!")
             ),
             column(
-              width=9
+              width=9,
+              h1("Reportable Value and Compliant Value Within the Agency"),
+              showOutput("wastePlot", "nvd3")
             )
           )
         )
@@ -147,35 +206,32 @@ dashboardPage(
       {tabItem(
         "sustainbility",
         fluidPage(
-          #tabPanel(
-          # title = strong("map 1.1"),
           column(
             width=3,
             uiOutput("yearBasicSelector"),
-            helpText("You can select the available year that has both CO2 and energy consumption.")
+            helpText("You can select the available year that has both CO2 and energy consumption."),
+            actionButton("yearBasicUnitButton","See Visualization!")
           ),
           column(
             width=9,
-            fluidRow( box(title="CO2 against energy bubble plot",status="primary", 
-                          solidHeader = TRUE, htmlOutput("testing"),width=850,height=725))
-          )
-          #)
+            box(title="CO2 against energy bubble plot",status="primary",
+                solidHeader = TRUE, htmlOutput("testing"),width=850,height=725)
+          )  
         )
         
       )}, # sustainbility
       
       {tabItem(
         "map",
-        tabsetPanel(
-          tabPanel(
-            title = strong("map 1.1"),
-            column(
-              width=3
+        div(class="outer",
+            tags$head(
+              # Include our custom CSS
+              includeCSS("www/styles.css")
+              #includeScript("gomap.js")
             ),
-            column(
-              width=9
-            )
-          )
+            
+            leafletOutput("map", width="100%", height="100%")
+            
         )
       )}, # map
       
@@ -183,13 +239,25 @@ dashboardPage(
         "predictive",
         tabsetPanel(
           tabPanel(
-            title = strong("predictive 1.1"),
-            column(
-              width=3
-            ),
-            column(
-              width=9
+            title = "View Data",
+            dataTableOutput("table1")
+          ),
+          tabPanel(
+            title = "Regression",
+            fluidPage(
+              column(
+                width=3,
+                uiOutput("regressionSelector")
+              ),
+              column(
+                width=9,
+                verbatimTextOutput("regTab")
+              )
             )
+          ),
+          tabPanel(
+            title = "4 Way Table Link",
+            tableOutput("tablekey")
           )
         )
       )} # predictive
