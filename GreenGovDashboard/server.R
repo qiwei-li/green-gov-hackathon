@@ -18,6 +18,7 @@ load('data/four_way_key.rda')
 load('data/bubble.rda')
 load('data/waste.rda')
 load("data/regression.rda")
+load("data/regressionNormed.rda")
 load('data/VehicleEngergyDistribution.rda')
 
 shinyServer(function(input, output) {
@@ -361,7 +362,7 @@ shinyServer(function(input, output) {
   })
   
   runRegression <- reactive({
-    lm(as.formula(paste0("CO2e ~ ", paste(input$Xs,collapse="+"))),data=regression)
+    lm(as.formula(paste0("CO2e ~ ", paste(input$Xs,collapse="+"))),data=regressionNormed)
   })
     
   output$regTab <- renderPrint({

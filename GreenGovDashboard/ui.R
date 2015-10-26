@@ -244,6 +244,7 @@ dashboardPage(
           ),
           tabPanel(
             title = "Regression",
+            helpText("On normalized data:"),
             fluidPage(
               column(
                 width=3,
