@@ -86,7 +86,6 @@ shinyServer(function(input, output) {
                                       "<br> the 20% reducation target is ", df$Value[df$Year==2013]*0.8)
       df$tag[df$Year==2014] = paste0(df$Name[df$Year==2014], " on ", df$Year[df$Year==2014], " is ", df$Value[df$Year==2014])
       df$tag2[which(df$Year==2014)] = df$tag2[which(df$Year==2013)]                               
-      save(df, file="~/Desktop/check.rda")
       p1 <- nPlot(Value ~ Year, group = 'Name', data=df, type = 'multiBarChart', dom="buildingPlot1")
       if(!input$buildingBasicIndex=="GreenPercent"){
         p1$chart(tooltipContent = "#! function(key, x, y, e){ return e.point.tag + e.point.tag2} !#")
@@ -112,7 +111,6 @@ shinyServer(function(input, output) {
                                       "<br> the 20% reducation target is ", df$Value[df$Year==2013]*0.8)
       df$tag[df$Year==2014] = paste0(df$Name[df$Year==2014], " on ", df$Year[df$Year==2014], " is ", df$Value[df$Year==2014])
       df$tag2[which(df$Year==2014)] = df$tag2[which(df$Year==2013)]                               
-      save(df, file="~/Desktop/check.rda")
       p1 <- nPlot(Value ~ Year, group = 'Name', data=df, type = 'multiBarChart', dom="buildingPlot1")
       if(!input$buildingBasicIndex=="GreenPercent"){
         p1$chart(tooltipContent = "#! function(key, x, y, e){ return e.point.tag + e.point.tag2} !#")
